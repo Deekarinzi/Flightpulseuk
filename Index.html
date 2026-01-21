@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>FlightpulseUK - Live Flight Tracker</title>
+    
+    <!-- Preconnect for performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://unpkg.com">
+    
+    <!-- Critical CSS first -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    
+    <!-- Fonts with display swap for fast rendering -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    
+    <!-- Leaflet CSS - loaded async -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#136dec",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#101822",
+                        "surface-dark": "#1b2533",
+                        "border-dark": "#2d3b4d"
+                    },
+                    fontFamily: {
+                        "display": ["Plus Jakarta Sans", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .ios-blur {
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .map-gradient-overlay {
+            background: linear-gradient(to bottom, rgba(16, 24, 34, 0.8) 0%, rgba(16, 24, 34, 0) 20%, rgba(16, 24, 34, 0) 80%, rgba(16, 24, 34, 0.9) 100%);
+        }
+        .glass-panel {
+            background: rgba(35, 51, 72, 0.8);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .view-hidden {
+            display: none !important;
+        }
+        
+        /* Leaflet customizations */
+        .leaflet-container {
+            background: #0b1219 !important;
+        }
+        .aircraft-marker {
+            transition: transform 0.3s ease;
+        }
+        .aircraft-marker:hover {
+            transform: scale(1.2);
+        }
+        .aircraft-marker.selected {
+            filter: drop-shadow(0 0 10px rgba(19, 109, 236, 0.8));
+        }
+        .custom-popup .leaflet-popup-content-wrapper {
+            background: rgba(27, 37, 51, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 0;
+        }
+        .custom-popup .leaflet-popup-tip {
+            background: rgba(27, 37, 51, 0.95);
+        }
+        .custom-popup .leaflet-popup-content {
+            margin: 0;
+            color: white;
+        }
+        
+        /* Loading states */
+        .skeleton {
+            background: linear-gradient(90deg, #1b2533 25%, #2d3b4d 50%, #1b2533 75%);
+            background-size: 200% 100%;
+            animation: skeleton 1.5s infinite;
+        }
+        @keyframes skeleton {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-white min-h-screen">
+
+    <!-- ==================== HOME VIEW ==================== -->
+    <div id="home-view" class="pb-24">
+        <!-- Top AppBar -->
+        <header class="sticky top-0 z-50 bg-background-light/80 dark:bg-background-dark/80 ios-blur border-b border-slate-200 dark:border-border-dark">
+            <div class="flex items-center p-4 justify-between max-w-md mx-auto">
+                <div class="text-primary flex size-10 shrink-0 items-center justify-center">
+                    <span class="material-symbols-outlined text-3xl">flight_takeoff</span>
+                </div>
+                <h1 class="text-slate-900 dark:text-white text-lg font-extrabold leading-tight tracking-tight flex-1 ml-2">FlightpulseUK</h1>
+                <div class="flex w-10 items-center justify-end">
+                    <button onclick="openProfileModal()" class="flex size-10 cursor-pointer items-center justify-center rounded-full bg-slate-200 dark:bg-surface-dark text-slate-700 dark:text-white hover:bg-slate-300 dark:hover:bg-surface-dark/80 transition-colors">
+                        <span class="material-symbols-outlined text-2xl">account_circle</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-md mx-auto">
+            <!-- Search Bar -->
+            <div class="px-4 py-4">
+                <label class="flex flex-col min-w-40 h-14 w-full group">
+                    <div class="flex w-full flex-1 items-stretch rounded-xl h-full shadow-lg transition-all group-focus-within:ring-2 group-focus-within:ring-primary">
+                        <div class="text-slate-400 dark:text-[#92a9c9] flex border-none bg-white dark:bg-surface-dark items-center justify-center pl-4 rounded-l-xl">
+                            <span class="material-symbols-outlined">search</span>
+                        </div>
+                        <input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-r-xl text-slate-900 dark:text-white focus:outline-0 focus:ring-0 border-none bg-white dark:bg-surface-dark focus:border-none h-full placeholder:text-slate-400 dark:placeholder:text-[#92a9c9] px-4 pl-2 text-base font-medium leading-normal" placeholder="Flight #, Airline, or Route" value=""/>
+                    </div>
+                </label>
+            </div>
+
+            <!-- Hero Section -->
+            <div class="@container px-4">
+                <div class="relative overflow-hidden rounded-2xl shadow-2xl">
+                    <div class="flex min-h-[320px] flex-col gap-6 bg-cover bg-center bg-no-repeat items-center justify-center p-6 text-center" style='background-image: linear-gradient(rgba(16, 24, 34, 0.7) 0%, rgba(16, 24, 34, 0.9) 100%), url("https://lh3.googleusercontent.com/aida-public/AB6AXuBNRFFqNmIOw44aD505UAiuTORer6jhpgqCvS0p2_BpGY25LRKzN-rDxrcrOEAkTOqpoEvXNaZkadslMvLk-WhmZsMN69dBLbU7cmerN_FzSujEtXh7spNsjqcUVen8vV0mwvBgMX6Q7rrzNfTTPvSLk3_PMeffWDB6jB4YRS-SaEM7h8ErRbZHxGvcGdgaeEgHokX0ADoBSPfdmBZ6n9mHXWp7wXtTZKzjjNhpCL22Ix4WpjmSvBmI4KbksXJQoob0MelzEpqKMPA");'>
+                        <div class="flex flex-col gap-3">
+                            <span class="inline-block mx-auto px-3 py-1 bg-primary/20 text-primary text-xs font-bold tracking-widest uppercase rounded-full border border-primary/30">Live Now</span>
+                            <h2 class="text-white text-3xl font-extrabold leading-tight tracking-tight">
+                                Track Live Flights
+                            </h2>
+                            <p class="text-slate-300 text-sm font-medium leading-relaxed max-w-[280px] mx-auto">
+                                Real-time aviation data at your fingertips. UK's leading live flight tracker and status portal.
+                            </p>
+                        </div>
+                        <button onclick="showView('map')" class="flex min-w-[200px] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl h-12 px-6 bg-primary text-white text-base font-bold transition-transform active:scale-95 shadow-lg shadow-primary/25">
+                            <span class="material-symbols-outlined text-xl">map</span>
+                            <span class="truncate">Open Live Map</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Searches -->
+            <section class="mt-6">
+                <div class="flex items-center justify-between px-4 pb-2">
+                    <h3 class="text-slate-900 dark:text-white text-lg font-bold leading-tight tracking-tight">Recent Searches</h3>
+                    <button onclick="clearRecentSearches()" class="text-primary text-sm font-semibold hover:text-primary/80 transition-colors">Clear</button>
+                </div>
+                <div class="flex gap-3 px-4 py-2 overflow-x-auto no-scrollbar">
+                    <div onclick="showView('details')" class="flex h-10 shrink-0 items-center justify-center gap-x-2 rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark px-4 shadow-sm cursor-pointer hover:border-primary/50 transition-colors">
+                        <span class="material-symbols-outlined text-primary text-lg">history</span>
+                        <p class="text-slate-700 dark:text-white text-sm font-semibold leading-normal">BA205</p>
+                    </div>
+                    <div onclick="showView('details')" class="flex h-10 shrink-0 items-center justify-center gap-x-2 rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark px-4 shadow-sm cursor-pointer hover:border-primary/50 transition-colors">
+                        <p class="text-slate-700 dark:text-white text-sm font-semibold leading-normal">LHR to JFK</p>
+                    </div>
+                    <div onclick="showView('map')" class="flex h-10 shrink-0 items-center justify-center gap-x-2 rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark px-4 shadow-sm cursor-pointer hover:border-primary/50 transition-colors">
+                        <p class="text-slate-700 dark:text-white text-sm font-semibold leading-normal">VS3</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Trending Flights -->
+            <section class="mt-6 px-4">
+                <h3 class="text-slate-900 dark:text-white text-lg font-bold leading-tight tracking-tight pb-4">Trending Flights</h3>
+                <div class="space-y-3">
+                    <!-- Flight Card 1 -->
+                    <div class="p-4 bg-white dark:bg-surface-dark rounded-2xl border border-slate-200 dark:border-border-dark shadow-sm cursor-pointer hover:border-primary/50 transition-colors" onclick="showView('map')">
+                        <div class="flex justify-between items-start mb-3">
+                            <div class="flex items-center gap-3">
+                                <div class="size-10 bg-slate-100 dark:bg-background-dark rounded-lg flex items-center justify-center text-primary font-bold">BA</div>
+                                <div>
+                                    <h4 class="font-bold text-slate-900 dark:text-white">BA217</h4>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">British Airways</p>
+                                </div>
+                            </div>
+                            <span class="px-2 py-1 bg-green-500/10 text-green-500 text-[10px] font-bold uppercase rounded-md border border-green-500/20">On Time</span>
+                        </div>
+                        <div class="flex items-center justify-between text-center px-2">
+                            <div>
+                                <p class="text-2xl font-black text-slate-900 dark:text-white">LHR</p>
+                                <p class="text-[10px] text-slate-500 uppercase font-bold">London</p>
+                            </div>
+                            <div class="flex-1 px-4 relative flex flex-col items-center">
+                                <div class="w-full h-[2px] bg-slate-200 dark:bg-border-dark relative">
+                                    <div class="absolute top-0 left-0 h-full bg-primary w-2/3"></div>
+                                    <span class="material-symbols-outlined absolute top-1/2 left-2/3 -translate-y-1/2 -translate-x-1/2 text-primary rotate-90 text-xl">flight</span>
+                                </div>
+                                <p class="text-[10px] text-primary font-bold mt-2">In Air</p>
+                            </div>
+                            <div>
+                                <p class="text-2xl font-black text-slate-900 dark:text-white">IAD</p>
+                                <p class="text-[10px] text-slate-500 uppercase font-bold">Washington</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Flight Card 2 -->
+                    <div class="p-4 bg-white dark:bg-surface-dark rounded-2xl border border-slate-200 dark:border-border-dark shadow-sm cursor-pointer hover:border-primary/50 transition-colors" onclick="showView('map')">
+                        <div class="flex justify-between items-start mb-3">
+                            <div class="flex items-center gap-3">
+                                <div class="size-10 bg-slate-100 dark:bg-background-dark rounded-lg flex items-center justify-center text-primary font-bold">VS</div>
+                                <div>
+                                    <h4 class="font-bold text-slate-900 dark:text-white">VS3</h4>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">Virgin Atlantic</p>
+                                </div>
+                            </div>
+                            <span class="px-2 py-1 bg-orange-500/10 text-orange-500 text-[10px] font-bold uppercase rounded-md border border-orange-500/20">Delayed 15m</span>
+                        </div>
+                        <div class="flex items-center justify-between text-center px-2">
+                            <div>
+                                <p class="text-2xl font-black text-slate-900 dark:text-white">LHR</p>
+                                <p class="text-[10px] text-slate-500 uppercase font-bold">London</p>
+                            </div>
+                            <div class="flex-1 px-4 flex flex-col items-center">
+                                <div class="w-full border-t-2 border-dashed border-slate-200 dark:border-border-dark relative flex justify-center">
+                                    <span class="material-symbols-outlined text-slate-300 dark:text-slate-600 absolute -top-3 rotate-90 text-xl">flight</span>
+                                </div>
+                                <p class="text-[10px] text-slate-400 font-bold mt-2">Scheduled</p>
+                            </div>
+                            <div>
+                                <p class="text-2xl font-black text-slate-900 dark:text-white">JFK</p>
+                                <p class="text-[10px] text-slate-500 uppercase font-bold">New York</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SEO Content -->
+            <footer class="mt-8 px-4 pb-8 text-center">
+                <div class="p-4 rounded-xl border border-slate-200 dark:border-border-dark bg-slate-50 dark:bg-surface-dark/30">
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                        FlightpulseUK is the premier <strong>live flight tracker</strong> for real-time aviation enthusiasts. Get precise <strong>real time flight tracker</strong> data, including gate info, flight delays, and UK radar coverage. Serving thousands of passengers daily with accurate arrival and departure status.
+                    </p>
+                </div>
+            </footer>
+        </main>
+    </div>
+
+    <!-- ==================== MAP VIEW ==================== -->
+    <div id="map-view" class="view-hidden overflow-hidden h-screen flex flex-col">
+        <!-- Top Navigation Area -->
+        <header class="fixed top-0 left-0 right-0 z-50">
+            <div class="flex items-center bg-background-dark/60 backdrop-blur-md p-4 justify-between">
+                <button onclick="showView('home')" class="text-white flex size-10 shrink-0 items-center justify-center hover:bg-white/10 rounded-full transition-colors">
+                    <span class="material-symbols-outlined">arrow_back</span>
+                </button>
+                <div class="flex flex-col items-center">
+                    <h1 class="text-white text-base font-bold leading-tight tracking-tight">FlightpulseUK.com</h1>
+                    <p class="text-[10px] text-primary font-bold uppercase tracking-widest flex items-center gap-1">
+                        <span class="flex h-1.5 w-1.5 rounded-full bg-primary animate-pulse"></span>
+                        Live UK Network
+                    </p>
+                </div>
+                <div class="flex w-10 items-center justify-end">
+                    <button onclick="openProfileModal()" class="flex size-10 items-center justify-center rounded-full bg-primary/20 text-primary hover:bg-primary/30 transition-colors">
+                        <span class="material-symbols-outlined">person</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search Bar Overlay -->
+            <div class="px-4 py-2">
+                <label class="flex flex-col min-w-40 h-11 w-full">
+                    <div class="flex w-full flex-1 items-stretch rounded-xl h-full glass-panel border border-white/10 shadow-lg">
+                        <div class="text-[#92a9c9] flex items-center justify-center pl-4 rounded-l-xl">
+                            <span class="material-symbols-outlined text-[20px]">search</span>
+                        </div>
+                        <input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden text-white focus:outline-0 focus:ring-0 border-none bg-transparent h-full placeholder:text-[#92a9c9] px-3 text-sm font-normal leading-normal" placeholder="Search flight, airport, or route" value=""/>
+                    </div>
+                </label>
+            </div>
+
+            <!-- Toggles/Chips -->
+            <div class="flex gap-2 px-4 py-2 overflow-x-auto no-scrollbar">
+                <div class="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-full bg-primary pl-2 pr-4 shadow-sm">
+                    <span class="material-symbols-outlined text-[18px]">sensors</span>
+                    <p class="text-white text-xs font-semibold leading-normal">Live Tracking</p>
+                </div>
+                <div class="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-full bg-[#233348] border border-white/5 pl-2 pr-4">
+                    <span class="material-symbols-outlined text-[18px]">location_on</span>
+                    <p class="text-white text-xs font-medium leading-normal">London (LHR)</p>
+                </div>
+                <div class="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-full bg-[#233348] border border-white/5 pl-2 pr-4">
+                    <span class="material-symbols-outlined text-[18px]">flight_land</span>
+                    <p class="text-white text-xs font-medium leading-normal">Arrivals</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Map View Container -->
+        <main class="relative flex-1 w-full bg-[#0b1219]">
+            <!-- Leaflet Map Conta
