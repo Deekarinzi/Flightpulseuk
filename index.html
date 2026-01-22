@@ -298,15 +298,15 @@
 
             <!-- Toggles/Chips -->
             <div class="flex gap-2 px-4 py-2 overflow-x-auto no-scrollbar">
-                <div class="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-full bg-primary pl-2 pr-4 shadow-sm">
+                <div onclick="showToast('Live tracking enabled', 'sensors')" class="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-full bg-primary pl-2 pr-4 shadow-sm cursor-pointer active:scale-95 transition-transform">
                     <span class="material-symbols-outlined text-[18px]">sensors</span>
                     <p class="text-white text-xs font-semibold leading-normal">Live Tracking</p>
                 </div>
-                <div class="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-full bg-[#233348] border border-white/5 pl-2 pr-4">
+                <div onclick="centerOnLHR()" class="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-full bg-[#233348] border border-white/5 pl-2 pr-4 cursor-pointer hover:bg-[#2a3d52] active:scale-95 transition-all">
                     <span class="material-symbols-outlined text-[18px]">location_on</span>
                     <p class="text-white text-xs font-medium leading-normal">London (LHR)</p>
                 </div>
-                <div class="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-full bg-[#233348] border border-white/5 pl-2 pr-4">
+                <div onclick="showToast('Showing arrivals only', 'flight_land')" class="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-full bg-[#233348] border border-white/5 pl-2 pr-4 cursor-pointer hover:bg-[#2a3d52] active:scale-95 transition-all">
                     <span class="material-symbols-outlined text-[18px]">flight_land</span>
                     <p class="text-white text-xs font-medium leading-normal">Arrivals</p>
                 </div>
@@ -315,4 +315,851 @@
 
         <!-- Main Map View Container -->
         <main class="relative flex-1 w-full bg-[#0b1219]">
-            <!-- Leaflet Map Conta
+            <!-- Leaflet Map Container -->
+            <div id="leaflet-map" class="absolute inset-0 z-0"></div>
+            
+            <!-- Map Overlay Gradient -->
+            <div class="absolute inset-0 map-gradient-overlay pointer-events-none z-10"></div>
+            
+            <!-- Loading indicator for map -->
+            <div id="map-loading" class="absolute inset-0 flex items-center justify-center z-20 bg-[#0b1219]">
+                <div class="flex flex-col items-center gap-3">
+                    <div class="w-10 h-10 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    <p class="text-[#92a9c9] text-sm">Loading live aircraft...</p>
+                </div>
+            </div>
+
+            <!-- Map Controls -->
+            <div class="absolute right-4 bottom-48 flex flex-col gap-3 z-30" id="map-controls">
+                <div class="flex flex-col rounded-xl glass-panel border border-white/10 overflow-hidden shadow-2xl">
+                    <button class="flex size-11 items-center justify-center hover:bg-white/10">
+                        <span class="material-symbols-outlined text-white">add</span>
+                    </button>
+                    <div class="h-[1px] bg-white/10 mx-2"></div>
+                    <button class="flex size-11 items-center justify-center hover:bg-white/10">
+                        <span class="material-symbols-outlined text-white">remove</span>
+                    </button>
+                </div>
+                <button onclick="centerOnUserLocation()" class="flex size-11 items-center justify-center rounded-xl glass-panel border border-white/10 shadow-2xl text-primary">
+                    <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1">near_me</span>
+                </button>
+                <button onclick="toggleMapLayers()" class="flex size-11 items-center justify-center rounded-xl glass-panel border border-white/10 shadow-2xl text-white hover:bg-white/10 active:scale-95 transition-all">
+                    <span class="material-symbols-outlined">layers</span>
+                </button>
+            </div>
+
+            <!-- Bottom Sheet / Flight Detail Mini-Card -->
+            <div id="flight-card" class="absolute bottom-4 left-4 right-4 z-40 transition-all duration-300">
+                <div class="glass-panel border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+                    <!-- Handle -->
+                    <div class="w-full flex justify-center pt-2 pb-1">
+                        <div class="w-10 h-1 rounded-full bg-white/20"></div>
+                    </div>
+                    <div class="p-4 pt-2">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h3 class="text-xl font-bold text-white">BA458</h3>
+                                    <span class="status-badge bg-green-500/20 text-green-400 text-[10px] font-bold px-2 py-0.5 rounded uppercase">On Time</span>
+                                </div>
+                                <p class="airline-info text-xs text-[#92a9c9] mt-0.5">British Airways • Airbus A320</p>
+                            </div>
+                            <button onclick="hideFlightCard()" class="text-[#92a9c9] hover:text-white transition-colors">
+                                <span class="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                        <div class="flex items-center justify-between gap-4 mb-5">
+                            <div class="text-left flex-1">
+                                <h4 class="origin-code text-2xl font-bold text-white leading-none">LHR</h4>
+                                <p class="text-[10px] text-[#92a9c9] uppercase mt-1">Departure</p>
+                                <p class="dep-time text-xs font-medium text-white/70">14:15</p>
+                            </div>
+                            <div class="flex flex-col items-center flex-1">
+                                <div class="w-full flex items-center gap-2">
+                                    <div class="h-0.5 flex-1 bg-white/10 rounded-full overflow-hidden">
+                                        <div class="h-full bg-primary w-2/3"></div>
+                                    </div>
+                                    <span class="material-symbols-outlined text-primary text-sm rotate-90">flight</span>
+                                    <div class="h-0.5 flex-1 bg-white/10"></div>
+                                </div>
+                                <p class="time-remaining text-[10px] text-[#92a9c9] mt-1 font-medium">1h 10m left</p>
+                            </div>
+                            <div class="text-right flex-1">
+                                <h4 class="dest-code text-2xl font-bold text-white leading-none">CDG</h4>
+                                <p class="text-[10px] text-[#92a9c9] uppercase mt-1">Arrival</p>
+                                <p class="arr-time text-xs font-medium text-white/70">16:35</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <button onclick="showView('details')" class="flex-1 py-3 px-4 bg-primary text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-transform">
+                                <span class="material-symbols-outlined text-[18px]">info</span>
+                                Full Details
+                            </button>
+                            <button onclick="subscribeToAlerts()" class="flex-1 py-3 px-4 bg-white/10 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 border border-white/5 active:scale-95 transition-transform">
+                                <span class="material-symbols-outlined text-[18px]">notifications</span>
+                                Alerts
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- SEO Text -->
+                <div class="mt-4 text-center px-6">
+                    <p class="text-[11px] text-[#92a9c9]/60 leading-tight">
+                        Real-time Aircraft Tracker: Providing 24/7 live flight tracking data across the UK. 
+                        Monitor 1,200+ active flights in British airspace.
+                    </p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- ==================== FLIGHT DETAILS VIEW ==================== -->
+    <div id="details-view" class="view-hidden min-h-screen">
+        <!-- TopAppBar -->
+        <header class="sticky top-0 z-50 flex items-center bg-background-light dark:bg-background-dark p-4 pb-2 justify-between border-b border-slate-200 dark:border-slate-800">
+            <div class="flex size-12 shrink-0 items-center cursor-pointer" onclick="showView('map')">
+                <span class="material-symbols-outlined text-slate-900 dark:text-white">arrow_back_ios</span>
+            </div>
+            <div class="flex flex-col items-center flex-1">
+                <h2 class="text-slate-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em]">BA123 Status</h2>
+                <div class="flex items-center gap-1.5">
+                    <span class="relative flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                    </span>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-green-500">Live Tracking</span>
+                </div>
+            </div>
+            <div class="flex w-12 items-center justify-end">
+                <button onclick="shareFlight()" class="flex cursor-pointer items-center justify-center rounded-lg h-12 bg-transparent text-slate-900 dark:text-white active:scale-95 transition-transform">
+                    <span class="material-symbols-outlined">share</span>
+                </button>
+            </div>
+        </header>
+
+        <main class="max-w-md mx-auto pb-32">
+            <!-- ProfileHeader / Flight Overview -->
+            <div class="flex p-4 @container">
+                <div class="flex w-full flex-col gap-4 items-center">
+                    <div class="flex gap-6 flex-col items-center w-full">
+                        <div class="flex justify-between items-center w-full px-4">
+                            <div class="text-center">
+                                <p class="text-3xl font-extrabold tracking-tight">LHR</p>
+                                <p class="text-sm text-slate-500 dark:text-[#92a9c9]">London</p>
+                            </div>
+                            <div class="flex-1 flex flex-col items-center px-4">
+                                <span class="material-symbols-outlined text-primary text-3xl rotate-90">flight</span>
+                            </div>
+                            <div class="text-center">
+                                <p class="text-3xl font-extrabold tracking-tight">JFK</p>
+                                <p class="text-sm text-slate-500 dark:text-[#92a9c9]">New York</p>
+                            </div>
+                        </div>
+                        <div class="flex flex-col items-center justify-center">
+                            <p class="text-primary text-base font-bold leading-normal text-center">En Route - On Time</p>
+                            <p class="text-slate-500 dark:text-[#92a9c9] text-xs font-normal leading-normal text-center">Boeing 777-300ER • G-STBJ</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ProgressBar -->
+            <div class="flex flex-col gap-3 p-4 mx-4 mt-2 bg-white dark:bg-slate-900 rounded-xl shadow-sm">
+                <div class="flex gap-6 justify-between items-end">
+                    <div>
+                        <p class="text-slate-500 dark:text-slate-400 text-xs font-medium uppercase tracking-wider">Remaining</p>
+                        <p class="text-slate-900 dark:text-white text-xl font-bold">2h 15m</p>
+                    </div>
+                    <p class="text-slate-500 dark:text-slate-400 text-sm font-normal mb-1">65% Completed</p>
+                </div>
+                <div class="rounded-full bg-slate-200 dark:bg-[#324867] h-3 overflow-hidden">
+                    <div class="h-full rounded-full bg-primary" style="width: 65%;"></div>
+                </div>
+                <div class="flex justify-between">
+                    <p class="text-slate-500 dark:text-[#92a9c9] text-xs font-normal">Departed: 11:45 AM</p>
+                    <p class="text-slate-500 dark:text-[#92a9c9] text-xs font-normal">Est. Arrival: 2:30 PM</p>
+                </div>
+            </div>
+
+            <!-- SectionHeader -->
+            <div class="px-4 pt-6 pb-2">
+                <h2 class="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-tight">Flight Details</h2>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-2 gap-4 p-4">
+                <div class="flex flex-col gap-1 rounded-xl p-4 border border-slate-200 dark:border-[#324867] bg-white dark:bg-transparent">
+                    <p class="text-slate-500 dark:text-slate-400 text-xs font-medium uppercase">Departure Gate</p>
+                    <p class="text-slate-900 dark:text-white text-xl font-bold">Terminal 5, B32</p>
+                </div>
+                <div class="flex flex-col gap-1 rounded-xl p-4 border border-slate-200 dark:border-[#324867] bg-white dark:bg-transparent">
+                    <p class="text-slate-500 dark:text-slate-400 text-xs font-medium uppercase">Arrival Gate</p>
+                    <p class="text-slate-900 dark:text-white text-xl font-bold">Terminal 7, 4</p>
+                </div>
+                <div class="flex flex-col gap-1 rounded-xl p-4 border border-slate-200 dark:border-[#324867] bg-white dark:bg-transparent">
+                    <p class="text-slate-500 dark:text-slate-400 text-xs font-medium uppercase">Altitude</p>
+                    <p class="text-slate-900 dark:text-white text-xl font-bold">36,000 ft</p>
+                </div>
+                <div class="flex flex-col gap-1 rounded-xl p-4 border border-slate-200 dark:border-[#324867] bg-white dark:bg-transparent">
+                    <p class="text-slate-500 dark:text-slate-400 text-xs font-medium uppercase">Ground Speed</p>
+                    <p class="text-slate-900 dark:text-white text-xl font-bold">510 kts</p>
+                </div>
+                <div class="flex flex-col gap-1 rounded-xl p-4 border border-slate-200 dark:border-[#324867] bg-white dark:bg-transparent">
+                    <p class="text-slate-500 dark:text-slate-400 text-xs font-medium uppercase">Squawk</p>
+                    <p class="text-slate-900 dark:text-white text-xl font-bold">7421</p>
+                </div>
+                <div class="flex flex-col gap-1 rounded-xl p-4 border border-slate-200 dark:border-[#324867] bg-white dark:bg-transparent">
+                    <p class="text-slate-500 dark:text-slate-400 text-xs font-medium uppercase">Vertical Speed</p>
+                    <p class="text-slate-900 dark:text-white text-xl font-bold">0 fpm</p>
+                </div>
+            </div>
+
+            <!-- SEO Content Section -->
+            <div class="px-4 pt-6 pb-2">
+                <h2 class="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-tight">Route Insights & News</h2>
+            </div>
+            <div class="px-4 space-y-4">
+                <div class="p-5 rounded-xl bg-primary/10 border border-primary/20">
+                    <h3 class="text-primary font-bold mb-2">About BA123 London to New York</h3>
+                    <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                        The BA123 flight status tracker provides real-time updates for British Airways' premier transatlantic route. Operating daily between London Heathrow (LHR) and John F. Kennedy International (JFK), this route spans approximately 3,451 miles with an average flight time of 7 hours and 45 minutes.
+                    </p>
+                    <div class="mt-4 flex flex-wrap gap-2">
+                        <span class="px-2 py-1 bg-white dark:bg-slate-800 rounded text-[10px] font-bold text-slate-500 uppercase">#FlightTracker</span>
+                        <span class="px-2 py-1 bg-white dark:bg-slate-800 rounded text-[10px] font-bold text-slate-500 uppercase">#LHRtoJFK</span>
+                        <span class="px-2 py-1 bg-white dark:bg-slate-800 rounded text-[10px] font-bold text-slate-500 uppercase">#LiveFlightStatus</span>
+                    </div>
+                </div>
+                <div onclick="showToast('Opening article...', 'article')" class="flex items-center gap-4 p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer hover:border-primary/50 active:scale-[0.98] transition-all">
+                    <div class="w-16 h-16 rounded-lg bg-cover bg-center shrink-0" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDClOUEVUXEswvg3lLPQ0gEbypUI7k7VsoZDnmIF6u6guIO3KOToywVm5gYlUz8rbJzVYmkdidOvwey39FTJmyyQ8LE9l9_d1ADuMzb3P0cOuZU75LdShrCGZ9OdvxUuMrPZeEmXzXk-37g6FddMw4bttBc0c86Bz1MdfZOJE5EtKTSphwv9ZyIjHD902reZZ1VhlqW8E6G-WNFEA8anh8JITILN7KJpyfZEKsTOYjaJH2tJ125oWOKcsSAb_RPVjZvcipaHw1KiMo')"></div>
+                    <div class="flex-1">
+                        <p class="text-xs font-bold text-primary uppercase">Airline Update</p>
+                        <h4 class="text-sm font-bold text-slate-900 dark:text-white">BA enhances Wi-Fi on JFK routes</h4>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">Free messaging now available for all Executive Club members...</p>
+                    </div>
+                    <span class="material-symbols-outlined text-slate-400">chevron_right</span>
+                </div>
+                <div class="p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <h4 class="text-sm font-bold mb-3">Historical Performance</h4>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-slate-500">On-time Rating</span>
+                            <span class="font-bold text-green-500">Great (88%)</span>
+                        </div>
+                        <div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full">
+                            <div class="bg-green-500 h-full rounded-full" style="width: 88%"></div>
+                        </div>
+                        <p class="text-[11px] text-slate-500 italic mt-2">
+                            Based on the last 30 days of flight data for BA123. Use FlightpulseUK for the most accurate flight status tracking.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Sticky Footer CTA -->
+        <div class="fixed bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-background-dark/80 backdrop-blur-md border-t border-slate-200 dark:border-slate-800">
+            <div class="max-w-md mx-auto flex gap-3">
+                <button onclick="subscribeToAlerts()" class="flex-1 bg-primary text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-primary/25 active:scale-95 transition-transform">
+                    <span class="material-symbols-outlined text-sm">notifications_active</span>
+                    Get Alerts
+                </button>
+                <button onclick="showView('map')" class="w-14 aspect-square bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl flex items-center justify-center border border-slate-200 dark:border-slate-700 active:scale-95 transition-transform">
+                    <span class="material-symbols-outlined">map</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== BOTTOM NAVIGATION BAR ==================== -->
+    <nav id="bottom-nav" class="fixed bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-background-dark/90 ios-blur border-t border-slate-200 dark:border-border-dark px-6 py-3 pb-6">
+        <div class="flex items-center justify-between max-w-md mx-auto">
+            <button onclick="showView('home')" id="nav-home" class="flex flex-col items-center gap-1 text-primary">
+                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1">home</span>
+                <span class="text-[10px] font-bold">Home</span>
+            </button>
+            <button onclick="showView('map')" id="nav-map" class="flex flex-col items-center gap-1 text-slate-400 dark:text-slate-500">
+                <span class="material-symbols-outlined">map</span>
+                <span class="text-[10px] font-bold">Live Map</span>
+            </button>
+            <button onclick="openAlertsModal()" id="nav-alerts" class="flex flex-col items-center gap-1 text-slate-400 dark:text-slate-500 hover:text-primary transition-colors">
+                <span class="material-symbols-outlined">notifications</span>
+                <span class="text-[10px] font-bold">Alerts</span>
+            </button>
+            <button onclick="openSavedModal()" id="nav-saved" class="flex flex-col items-center gap-1 text-slate-400 dark:text-slate-500 hover:text-primary transition-colors">
+                <span class="material-symbols-outlined">bookmark</span>
+                <span class="text-[10px] font-bold">Saved</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-20 left-1/2 -translate-x-1/2 z-[100] transform transition-all duration-300 opacity-0 -translate-y-4 pointer-events-none">
+        <div class="bg-surface-dark border border-border-dark rounded-xl px-4 py-3 shadow-2xl flex items-center gap-3">
+            <span id="toast-icon" class="material-symbols-outlined text-primary">notifications</span>
+            <p id="toast-message" class="text-white text-sm font-medium">Notification</p>
+        </div>
+    </div>
+
+    <!-- Profile Modal -->
+    <div id="profile-modal" class="fixed inset-0 z-[100] view-hidden">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeProfileModal()"></div>
+        <div class="absolute bottom-0 left-0 right-0 bg-background-dark border-t border-border-dark rounded-t-3xl p-6 transform transition-transform">
+            <div class="w-12 h-1 bg-slate-600 rounded-full mx-auto mb-6"></div>
+            <div class="flex items-center gap-4 mb-6">
+                <div class="size-16 rounded-full bg-primary/20 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-primary text-3xl">account_circle</span>
+                </div>
+                <div>
+                    <h3 class="text-white text-lg font-bold">Guest User</h3>
+                    <p class="text-slate-400 text-sm">Sign in to sync your flights</p>
+                </div>
+            </div>
+            <div class="space-y-2">
+                <button onclick="showToast('Sign in coming soon!', 'login'); closeProfileModal();" class="w-full py-3 px-4 bg-primary text-white rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform">
+                    <span class="material-symbols-outlined text-xl">login</span>
+                    Sign In
+                </button>
+                <button onclick="showToast('Account creation coming soon!', 'person_add'); closeProfileModal();" class="w-full py-3 px-4 bg-surface-dark text-white rounded-xl font-medium flex items-center justify-center gap-2 border border-border-dark active:scale-95 transition-transform">
+                    <span class="material-symbols-outlined text-xl">person_add</span>
+                    Create Account
+                </button>
+            </div>
+            <div class="mt-6 pt-4 border-t border-border-dark space-y-1">
+                <button onclick="showToast('Settings coming soon!', 'settings'); closeProfileModal();" class="w-full py-3 px-4 text-left text-slate-300 hover:bg-surface-dark rounded-xl flex items-center gap-3 transition-colors">
+                    <span class="material-symbols-outlined">settings</span>
+                    Settings
+                </button>
+                <button onclick="showToast('Help & Support coming soon!', 'help'); closeProfileModal();" class="w-full py-3 px-4 text-left text-slate-300 hover:bg-surface-dark rounded-xl flex items-center gap-3 transition-colors">
+                    <span class="material-symbols-outlined">help</span>
+                    Help & Support
+                </button>
+                <button onclick="showToast('FlightpulseUK v1.0 - UK Live Flight Tracker', 'info'); closeProfileModal();" class="w-full py-3 px-4 text-left text-slate-300 hover:bg-surface-dark rounded-xl flex items-center gap-3 transition-colors">
+                    <span class="material-symbols-outlined">info</span>
+                    About FlightpulseUK
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alerts Modal -->
+    <div id="alerts-modal" class="fixed inset-0 z-[100] view-hidden">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeAlertsModal()"></div>
+        <div class="absolute bottom-0 left-0 right-0 bg-background-dark border-t border-border-dark rounded-t-3xl p-6 max-h-[70vh] overflow-y-auto">
+            <div class="w-12 h-1 bg-slate-600 rounded-full mx-auto mb-4"></div>
+            <h3 class="text-white text-xl font-bold mb-4 flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary">notifications</span>
+                Flight Alerts
+            </h3>
+            <div class="space-y-3">
+                <div class="p-4 bg-surface-dark rounded-xl border border-border-dark">
+                    <div class="flex items-start justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="size-10 bg-green-500/20 rounded-full flex items-center justify-center">
+                                <span class="material-symbols-outlined text-green-400">flight_takeoff</span>
+                            </div>
+                            <div>
+                                <p class="text-white font-semibold">BA217 Departed</p>
+                                <p class="text-slate-400 text-xs">Left London Heathrow on time</p>
+                            </div>
+                        </div>
+                        <span class="text-slate-500 text-xs">2m ago</span>
+                    </div>
+                </div>
+                <div class="p-4 bg-surface-dark rounded-xl border border-border-dark">
+                    <div class="flex items-start justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="size-10 bg-orange-500/20 rounded-full flex items-center justify-center">
+                                <span class="material-symbols-outlined text-orange-400">schedule</span>
+                            </div>
+                            <div>
+                                <p class="text-white font-semibold">VS3 Delayed</p>
+                                <p class="text-slate-400 text-xs">New departure time: 15:30</p>
+                            </div>
+                        </div>
+                        <span class="text-slate-500 text-xs">15m ago</span>
+                    </div>
+                </div>
+                <div class="p-4 bg-surface-dark rounded-xl border border-border-dark">
+                    <div class="flex items-start justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="size-10 bg-primary/20 rounded-full flex items-center justify-center">
+                                <span class="material-symbols-outlined text-primary">flight_land</span>
+                            </div>
+                            <div>
+                                <p class="text-white font-semibold">BA458 Arriving Soon</p>
+                                <p class="text-slate-400 text-xs">Landing at CDG in 1h 10m</p>
+                            </div>
+                        </div>
+                        <span class="text-slate-500 text-xs">30m ago</span>
+                    </div>
+                </div>
+            </div>
+            <button onclick="closeAlertsModal()" class="w-full mt-4 py-3 bg-surface-dark text-white rounded-xl font-medium border border-border-dark">
+                Close
+            </button>
+        </div>
+    </div>
+
+    <!-- Saved Flights Modal -->
+    <div id="saved-modal" class="fixed inset-0 z-[100] view-hidden">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeSavedModal()"></div>
+        <div class="absolute bottom-0 left-0 right-0 bg-background-dark border-t border-border-dark rounded-t-3xl p-6 max-h-[70vh] overflow-y-auto">
+            <div class="w-12 h-1 bg-slate-600 rounded-full mx-auto mb-4"></div>
+            <h3 class="text-white text-xl font-bold mb-4 flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary">bookmark</span>
+                Saved Flights
+            </h3>
+            <div class="space-y-3">
+                <div class="p-4 bg-surface-dark rounded-xl border border-border-dark cursor-pointer hover:border-primary/50 transition-colors" onclick="closeSavedModal(); showView('details');">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-white font-bold">BA123</span>
+                            <span class="px-2 py-0.5 bg-green-500/20 text-green-400 text-[10px] font-bold rounded">ON TIME</span>
+                        </div>
+                        <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1">bookmark</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-sm">
+                        <span class="text-white font-semibold">LHR</span>
+                        <span class="material-symbols-outlined text-slate-500 text-sm rotate-90">flight</span>
+                        <span class="text-white font-semibold">JFK</span>
+                        <span class="text-slate-500 ml-auto text-xs">Today, 14:30</span>
+                    </div>
+                </div>
+                <div class="p-4 bg-surface-dark rounded-xl border border-border-dark cursor-pointer hover:border-primary/50 transition-colors" onclick="closeSavedModal(); showView('map');">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-white font-bold">BA458</span>
+                            <span class="px-2 py-0.5 bg-primary/20 text-primary text-[10px] font-bold rounded">IN AIR</span>
+                        </div>
+                        <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1">bookmark</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-sm">
+                        <span class="text-white font-semibold">LHR</span>
+                        <span class="material-symbols-outlined text-slate-500 text-sm rotate-90">flight</span>
+                        <span class="text-white font-semibold">CDG</span>
+                        <span class="text-slate-500 ml-auto text-xs">Arriving 16:35</span>
+                    </div>
+                </div>
+            </div>
+            <button onclick="closeSavedModal()" class="w-full mt-4 py-3 bg-surface-dark text-white rounded-xl font-medium border border-border-dark">
+                Close
+            </button>
+        </div>
+    </div>
+
+    <!-- Leaflet JS - loaded before our script -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <script>
+        // ==================== CONFIGURATION ====================
+        const CONFIG = {
+            // Cloudflare Worker API endpoint (update this after deploying worker)
+            API_BASE: '/api', // Will be proxied through Cloudflare Worker
+            
+            // Map settings
+            MAP_CENTER: [51.4700, -0.4543], // London Heathrow
+            MAP_ZOOM: 7,
+            
+            // Update intervals (in ms)
+            FLIGHT_UPDATE_INTERVAL: 10000, // 10 seconds
+            
+            // Cache duration (in ms)
+            CACHE_DURATION: 30000, // 30 seconds
+        };
+        
+        // ==================== STATE ====================
+        let map = null;
+        let flightMarkers = {};
+        let selectedFlight = null;
+        let flightData = [];
+        let lastFetch = 0;
+        let flightCardVisible = true;
+        
+        // ==================== MOCK DATA (Fallback when API unavailable) ====================
+        const MOCK_FLIGHTS = [
+            { icao24: 'abc123', callsign: 'BA458', origin: 'LHR', destination: 'CDG', lat: 51.15, lng: -0.18, heading: 135, altitude: 36000, speed: 450, status: 'On Time', airline: 'British Airways', aircraft: 'Airbus A320', depTime: '14:15', arrTime: '16:35', remaining: '1h 10m' },
+            { icao24: 'def456', callsign: 'BA217', origin: 'LHR', destination: 'IAD', lat: 51.8, lng: -1.2, heading: 285, altitude: 38000, speed: 510, status: 'On Time', airline: 'British Airways', aircraft: 'Boeing 777', depTime: '10:30', arrTime: '14:15', remaining: '2h 45m' },
+            { icao24: 'ghi789', callsign: 'VS3', origin: 'LHR', destination: 'JFK', lat: 52.1, lng: -2.5, heading: 270, altitude: 40000, speed: 520, status: 'Delayed 15m', airline: 'Virgin Atlantic', aircraft: 'Airbus A350', depTime: '11:00', arrTime: '14:30', remaining: '3h 15m' },
+            { icao24: 'jkl012', callsign: 'EZY101', origin: 'MAN', destination: 'CDG', lat: 51.5, lng: 0.8, heading: 140, altitude: 32000, speed: 420, status: 'On Time', airline: 'easyJet', aircraft: 'Airbus A320', depTime: '13:00', arrTime: '15:20', remaining: '1h 50m' },
+            { icao24: 'mno345', callsign: 'RYR882', origin: 'STN', destination: 'DUB', lat: 52.8, lng: -3.5, heading: 290, altitude: 35000, speed: 440, status: 'On Time', airline: 'Ryanair', aircraft: 'Boeing 737', depTime: '12:45', arrTime: '13:55', remaining: '0h 40m' },
+            { icao24: 'pqr678', callsign: 'BA123', origin: 'LHR', destination: 'JFK', lat: 53.2, lng: -4.8, heading: 275, altitude: 36000, speed: 510, status: 'On Time', airline: 'British Airways', aircraft: 'Boeing 777-300ER', depTime: '11:45', arrTime: '14:30', remaining: '2h 15m' },
+        ];
+        
+        // ==================== CACHING ====================
+        const cache = {
+            data: {},
+            set(key, value, duration = CONFIG.CACHE_DURATION) {
+                this.data[key] = {
+                    value,
+                    expiry: Date.now() + duration
+                };
+            },
+            get(key) {
+                const item = this.data[key];
+                if (!item) return null;
+                if (Date.now() > item.expiry) {
+                    delete this.data[key];
+                    return null;
+                }
+                return item.value;
+            }
+        };
+
+        // ==================== MAP FUNCTIONS ====================
+        function initMap() {
+            if (map) return; // Already initialized
+            
+            // Create dark-themed map
+            map = L.map('leaflet-map', {
+                center: CONFIG.MAP_CENTER,
+                zoom: CONFIG.MAP_ZOOM,
+                zoomControl: false, // We use custom controls
+                attributionControl: false
+            });
+            
+            // Dark tile layer (CartoDB Dark Matter - free)
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                maxZoom: 19,
+                subdomains: 'abcd'
+            }).addTo(map);
+            
+            // Add custom attribution
+            L.control.attribution({
+                position: 'bottomleft',
+                prefix: ''
+            }).addTo(map).addAttribution('© OpenStreetMap © CARTO');
+            
+            // Connect custom zoom controls
+            document.querySelector('#map-controls button:first-child')?.addEventListener('click', () => map.zoomIn());
+            document.querySelector('#map-controls button:nth-child(3)')?.addEventListener('click', () => map.zoomOut());
+            
+            // Load initial flights
+            loadFlights();
+            
+            // Set up periodic refresh
+            setInterval(loadFlights, CONFIG.FLIGHT_UPDATE_INTERVAL);
+        }
+        
+        function createAircraftIcon(heading, isSelected = false) {
+            const color = isSelected ? '#136dec' : '#92a9c9';
+            const size = isSelected ? 32 : 24;
+            const shadowClass = isSelected ? 'selected' : '';
+            
+            return L.divIcon({
+                className: `aircraft-marker ${shadowClass}`,
+                html: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" style="transform: rotate(${heading}deg)">
+                    <path fill="${color}" d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
+                </svg>`,
+                iconSize: [size, size],
+                iconAnchor: [size/2, size/2]
+            });
+        }
+        
+        async function loadFlights() {
+            // Check cache first
+            const cached = cache.get('flights');
+            if (cached) {
+                updateFlightMarkers(cached);
+                return;
+            }
+            
+            try {
+                // Try to fetch from Cloudflare Worker API
+                const response = await fetch(`${CONFIG.API_BASE}/flights`, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    flightData = data.flights || data;
+                    cache.set('flights', flightData);
+                    updateFlightMarkers(flightData);
+                } else {
+                    throw new Error('API unavailable');
+                }
+            } catch (error) {
+                console.log('Using mock data:', error.message);
+                // Fallback to mock data
+                flightData = MOCK_FLIGHTS;
+                updateFlightMarkers(flightData);
+            }
+            
+            // Hide loading indicator
+            document.getElementById('map-loading')?.classList.add('view-hidden');
+        }
+        
+        function updateFlightMarkers(flights) {
+            if (!map) return;
+            
+            flights.forEach(flight => {
+                const id = flight.icao24 || flight.callsign;
+                const isSelected = selectedFlight?.icao24 === id;
+                
+                if (flightMarkers[id]) {
+                    // Update existing marker position with animation
+                    flightMarkers[id].setLatLng([flight.lat, flight.lng]);
+                    flightMarkers[id].setIcon(createAircraftIcon(flight.heading, isSelected));
+                } else {
+                    // Create new marker
+                    const marker = L.marker([flight.lat, flight.lng], {
+                        icon: createAircraftIcon(flight.heading, isSelected)
+                    }).addTo(map);
+                    
+                    marker.on('click', () => selectFlight(flight));
+                    flightMarkers[id] = marker;
+                }
+            });
+        }
+        
+        function selectFlight(flight) {
+            selectedFlight = flight;
+            
+            // Update all markers to reflect selection
+            updateFlightMarkers(flightData);
+            
+            // Center map on selected flight
+            map?.flyTo([flight.lat, flight.lng], 9, { duration: 0.5 });
+            
+            // Update flight card
+            updateFlightCard(flight);
+            showFlightCard();
+        }
+        
+        function updateFlightCard(flight) {
+            // Update the flight card with selected flight data
+            const card = document.getElementById('flight-card');
+            if (!card) return;
+            
+            const statusClass = flight.status.includes('Delayed') 
+                ? 'bg-orange-500/20 text-orange-400' 
+                : 'bg-green-500/20 text-green-400';
+            
+            card.querySelector('h3').textContent = flight.callsign;
+            card.querySelector('.status-badge').className = `status-badge ${statusClass} text-[10px] font-bold px-2 py-0.5 rounded uppercase`;
+            card.querySelector('.status-badge').textContent = flight.status;
+            card.querySelector('.airline-info').textContent = `${flight.airline} • ${flight.aircraft}`;
+            card.querySelector('.origin-code').textContent = flight.origin;
+            card.querySelector('.dest-code').textContent = flight.destination;
+            card.querySelector('.dep-time').textContent = flight.depTime;
+            card.querySelector('.arr-time').textContent = flight.arrTime;
+            card.querySelector('.time-remaining').textContent = `${flight.remaining} left`;
+        }
+        
+        function centerOnUserLocation() {
+            if ('geolocation' in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        map?.flyTo([position.coords.latitude, position.coords.longitude], 10);
+                        showToast('Centered on your location', 'near_me');
+                    },
+                    () => showToast('Could not get your location', 'location_off')
+                );
+            }
+        }
+        
+        function centerOnLHR() {
+            if (map) {
+                map.flyTo([51.4700, -0.4543], 10, { duration: 0.5 });
+                showToast('Centered on London Heathrow', 'location_on');
+            }
+        }
+        
+        function toggleMapLayers() {
+            showToast('Map layers coming soon!', 'layers');
+        }
+
+        function showView(viewName) {
+            const homeView = document.getElementById('home-view');
+            const mapView = document.getElementById('map-view');
+            const detailsView = document.getElementById('details-view');
+            const navHome = document.getElementById('nav-home');
+            const navMap = document.getElementById('nav-map');
+            const navAlerts = document.getElementById('nav-alerts');
+            const navSaved = document.getElementById('nav-saved');
+            const bottomNav = document.getElementById('bottom-nav');
+            
+            // Reset all nav buttons
+            const navButtons = [navHome, navMap, navAlerts, navSaved];
+            navButtons.forEach(btn => {
+                btn.classList.remove('text-primary');
+                btn.classList.add('text-slate-400', 'dark:text-slate-500');
+                const icon = btn.querySelector('.material-symbols-outlined');
+                if (icon) icon.style.fontVariationSettings = "'FILL' 0";
+            });
+
+            // Hide all views first
+            homeView.classList.add('view-hidden');
+            mapView.classList.add('view-hidden');
+            detailsView.classList.add('view-hidden');
+
+            if (viewName === 'home') {
+                homeView.classList.remove('view-hidden');
+                document.body.classList.remove('overflow-hidden');
+                navHome.classList.add('text-primary');
+                navHome.classList.remove('text-slate-400', 'dark:text-slate-500');
+                navHome.querySelector('.material-symbols-outlined').style.fontVariationSettings = "'FILL' 1";
+                bottomNav.classList.remove('view-hidden');
+                bottomNav.classList.remove('pb-8');
+                bottomNav.classList.add('pb-6');
+                window.scrollTo(0, 0);
+            } else if (viewName === 'map') {
+                mapView.classList.remove('view-hidden');
+                document.body.classList.add('overflow-hidden');
+                navMap.classList.add('text-primary');
+                navMap.classList.remove('text-slate-400', 'dark:text-slate-500');
+                navMap.querySelector('.material-symbols-outlined').style.fontVariationSettings = "'FILL' 1";
+                bottomNav.classList.remove('view-hidden');
+                bottomNav.classList.add('pb-8');
+                bottomNav.classList.remove('pb-6');
+                
+                // Initialize map lazily (only when viewing map)
+                setTimeout(() => {
+                    initMap();
+                    if (map) map.invalidateSize();
+                }, 100);
+                
+                // Show flight card when entering map view
+                showFlightCard();
+            } else if (viewName === 'details') {
+                detailsView.classList.remove('view-hidden');
+                document.body.classList.remove('overflow-hidden');
+                // Hide bottom nav on details page since it has its own sticky footer
+                bottomNav.classList.add('view-hidden');
+                // Scroll to top when showing details
+                window.scrollTo(0, 0);
+            }
+        }
+
+        // Toast notification
+        function showToast(message, icon = 'notifications') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+            const toastIcon = document.getElementById('toast-icon');
+            
+            toastMessage.textContent = message;
+            toastIcon.textContent = icon;
+            
+            toast.classList.remove('opacity-0', '-translate-y-4', 'pointer-events-none');
+            toast.classList.add('opacity-100', 'translate-y-0');
+            
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-4', 'pointer-events-none');
+                toast.classList.remove('opacity-100', 'translate-y-0');
+            }, 3000);
+        }
+
+        // Profile modal
+        function openProfileModal() {
+            document.getElementById('profile-modal').classList.remove('view-hidden');
+            document.body.classList.add('overflow-hidden');
+        }
+
+        function closeProfileModal() {
+            document.getElementById('profile-modal').classList.add('view-hidden');
+            if (document.getElementById('map-view').classList.contains('view-hidden')) {
+                document.body.classList.remove('overflow-hidden');
+            }
+        }
+
+        // Alerts modal
+        function openAlertsModal() {
+            document.getElementById('alerts-modal').classList.remove('view-hidden');
+            document.body.classList.add('overflow-hidden');
+        }
+
+        function closeAlertsModal() {
+            document.getElementById('alerts-modal').classList.add('view-hidden');
+            if (document.getElementById('map-view').classList.contains('view-hidden')) {
+                document.body.classList.remove('overflow-hidden');
+            }
+        }
+
+        // Saved modal
+        function openSavedModal() {
+            document.getElementById('saved-modal').classList.remove('view-hidden');
+            document.body.classList.add('overflow-hidden');
+        }
+
+        function closeSavedModal() {
+            document.getElementById('saved-modal').classList.add('view-hidden');
+            if (document.getElementById('map-view').classList.contains('view-hidden')) {
+                document.body.classList.remove('overflow-hidden');
+            }
+        }
+
+        // Flight card on map
+        function hideFlightCard() {
+            const flightCard = document.getElementById('flight-card');
+            flightCard.classList.add('translate-y-full', 'opacity-0');
+            flightCardVisible = false;
+        }
+
+        function showFlightCard() {
+            const flightCard = document.getElementById('flight-card');
+            flightCard.classList.remove('translate-y-full', 'opacity-0');
+            flightCardVisible = true;
+        }
+
+        function toggleFlightCard() {
+            if (flightCardVisible) {
+                hideFlightCard();
+            } else {
+                showFlightCard();
+            }
+        }
+
+        // Subscribe to alerts
+        function subscribeToAlerts() {
+            showToast('You will receive alerts for this flight!', 'notifications_active');
+        }
+
+        // Share functionality
+        function shareFlight() {
+            if (navigator.share) {
+                navigator.share({
+                    title: 'BA123 Flight Status - FlightpulseUK',
+                    text: 'Track BA123 from London to New York in real-time!',
+                    url: window.location.href
+                });
+            } else {
+                showToast('Link copied to clipboard!', 'link');
+            }
+        }
+
+        // Clear recent searches
+        function clearRecentSearches() {
+            showToast('Recent searches cleared', 'delete');
+        }
+
+        // Search functionality
+        function handleSearch(event) {
+            if (event.key === 'Enter') {
+                const query = event.target.value.trim();
+                if (query) {
+                    showToast(`Searching for "${query}"...`, 'search');
+                    setTimeout(() => {
+                        showView('details');
+                    }, 500);
+                }
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            showView('home');
+            
+            // Add event listeners for search inputs
+            document.querySelectorAll('input[placeholder*="Flight"], input[placeholder*="Search"]').forEach(input => {
+                input.addEventListener('keypress', handleSearch);
+            });
+        });
+
+        // Also run immediately in case DOM is already loaded
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            showView('home');
+        }
+    </script>
+</body>
+</html>
