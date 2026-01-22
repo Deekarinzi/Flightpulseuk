@@ -1,0 +1,93 @@
+# =====================================================
+# FlightpulseUK - Cloudflare Worker Configuration
+# =====================================================
+# 
+# This file configures the standalone Cloudflare Worker.
+# For Cloudflare Pages, you don't need this file - 
+# just use the /functions folder instead.
+#
+# DEPLOYMENT:
+#   1. Install Wrangler: npm install -g wrangler
+#   2. Login: wrangler login
+#   3. Deploy: wrangler deploy
+#
+# =====================================================
+
+name = "flightpulseuk-api"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# Account ID (get from Cloudflare dashboard)
+# account_id = "your-account-id-here"
+
+# =====================================================
+# ROUTES - Uncomment and configure for custom domain
+# =====================================================
+# routes = [
+#   { pattern = "api.flightpulseuk.com/*", zone_name = "flightpulseuk.com" }
+# ]
+
+# =====================================================
+# ENVIRONMENTS
+# =====================================================
+
+[env.development]
+name = "flightpulseuk-api-dev"
+vars = { ENVIRONMENT = "development" }
+
+[env.production]
+name = "flightpulseuk-api"
+vars = { ENVIRONMENT = "production" }
+
+# =====================================================
+# KV NAMESPACE - For caching flight data
+# =====================================================
+# 
+# To create a KV namespace, run:
+#   wrangler kv:namespace create FLIGHT_CACHE
+#
+# Then add the ID below:
+#
+# [[kv_namespaces]]
+# binding = "FLIGHT_CACHE"
+# id = "your-kv-namespace-id"
+#
+# For preview/development:
+# [[kv_namespaces]]
+# binding = "FLIGHT_CACHE"
+# id = "your-kv-namespace-id"
+# preview_id = "your-preview-kv-namespace-id"
+
+# =====================================================
+# ENVIRONMENT VARIABLES (Secrets)
+# =====================================================
+#
+# For API keys, use wrangler secret:
+#   wrangler secret put AVIATIONSTACK_KEY
+#   wrangler secret put OPENSKY_USERNAME
+#   wrangler secret put OPENSKY_PASSWORD
+#
+# Or set in Cloudflare Dashboard:
+#   Workers & Pages > Your Worker > Settings > Variables
+#
+# [vars]
+# PUBLIC_VAR = "some-public-value"
+
+# =====================================================
+# TRIGGERS - Scheduled tasks (optional)
+# =====================================================
+# 
+# Uncomment to run cache refresh every 5 minutes:
+#
+# [triggers]
+# crons = ["*/5 * * * *"]
+
+# =====================================================
+# BUILD SETTINGS (if using TypeScript or bundling)
+# =====================================================
+#
+# [build]
+# command = "npm run build"
+# 
+# [build.upload]
+# format = "modules"
